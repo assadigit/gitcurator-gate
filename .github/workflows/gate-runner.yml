@@ -1,0 +1,114 @@
+# GitCurator mirror gate — runs the full CI gate (38 module compiles +
+# 704 tests + the offline websites-golden run) against the PRIVATE
+# assadigit/GitCurator repository, checked out with the GC_PAT secret.
+#
+# Why here? This repository is public, so GitHub Actions minutes are
+# free and unlimited and NOT subject to the account billing block that
+# has stopped CI on the private GitCurator repo since 2026-09-24.
+#
+# Triggers:
+#   - repository_dispatch "gate"  (sent via API after merges/changes)
+#   - workflow_dispatch           (manual; optional `ref` input tests any
+#                                  branch, tag or SHA)
+#   - weekly heartbeat (Sun 03:00 UTC)
+#
+# SECURITY: never add `pull_request` triggers here — this repo is public
+# and must not run untrusted code with access to secrets.
+
+name: GitCurator gate (mirror)
+
+on:
+  repository_dispatch:
+    types: [gate]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'GitCurator ref (branch / tag / SHA) to test'
+        required: false
+        default: 'main'
+  schedule:
+    - cron: '0 3 * * 0'
+
+jobs:
+  verify:
+    name: Python gate (compile + tests + golden)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    env:
+      QT_QPA_PLATFORM: offscreen
+
+    steps:
+      - name: Checkout GitCurator (private, via GC_PAT)
+        uses: actions/checkout@v4
+        with:
+          repository: assadigit/GitCurator
+          token: ${{ secrets.GC_PAT }}
+          ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Qt system libraries (runner images no longer bundle libEGL, needed by offscreen PyQt6)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1 libglib2.0-0
+
+      - name: Install app requirements (the quarantine suite imports the GUI package)
+        run: python -m pip install --quiet -r requirements.txt
+
+      - name: Compile the 38 audited modules
+        run: >
+          python -m py_compile
+          main.py
+          gitcurator/gui/app.py
+          gitcurator/gui/icons.py
+          gitcurator/gui/telegram_lock.py
+          gitcurator/core/links.py
+          gitcurator/core/storage.py
+          gitcurator/core/note_builder.py
+          gitcurator/core/llm_client.py
+          gitcurator/core/dryrun.py
+          gitcurator/core/note_state.py
+          gitcurator/core/taxonomy.py
+          gitcurator/core/prompts.py
+          gitcurator/core/web_fetch.py
+          gitcurator/core/web_extract.py
+          gitcurator/core/website_pipeline.py
+          gitcurator/core/mirror.py
+          gitcurator/core/recall.py
+          gitcurator/core/embeddings.py
+          gitcurator/core/linking.py
+          gitcurator/core/connection_check.py
+          gitcurator/integrations/vaultseal.py
+          gitcurator/integrations/goodrepos.py
+          gitcurator/integrations/telegram_fetch_worker.py
+          gitcurator/integrations/telethon_fetcher.py
+          gitcurator/integrations/backfill_manager.py
+          gitcurator/integrations/subprocess_runner.py
+          gitcurator/cloud/cloudflare_sync.py
+          gitcurator/cli.py
+          gitcurator/tools/scan_vault_edits.py
+          gitcurator/tools/snapshot_vault.py
+          gitcurator/tools/pick_golden_links.py
+          gitcurator/tools/run_golden_websites.py
+          gitcurator/tools/backfill_websites.py
+          gitcurator/tools/mirror_manual.py
+          gitcurator/tools/build_zip.py
+          gitcurator/tools/add_recall_hooks.py
+          gitcurator/tools/build_links.py
+          gitcurator/tools/smoke_detectset.py
+
+      - name: Run the test suite (core + e2e + goodrepos + reliability + quarantine + phase0 + phase1 + phase2 + phase3 + phase4 + phase5 + packaging + llamacpp + phase6 + connection + detectset + webproxy + intakefix)
+        run: python -m unittest tests.test_core tests.test_e2e tests.test_goodrepos tests.test_reliability tests.test_quarantine tests.test_phase0 tests.test_phase1 tests.test_phase2 tests.test_phase3 tests.test_phase4 tests.test_phase5 tests.test_packaging tests.test_llamacpp tests.test_phase6 tests.test_connection tests.test_detectset tests.test_webproxy tests.test_intakefix -v
+
+      - name: Offline golden-set run (websites pipeline, no network)
+        run: python gitcurator/tools/run_golden_websites.py --offline
+
+      - name: Gate summary
+        if: always()
+        run: echo "Mirror gate on ref ${{ github.event.client_payload.ref || inputs.ref || 'main' }} — 38 compiles + 704 tests + offline golden run (v0.20.0 — the intake truth · blocked domains · missing-repo notes · vault separation)."
+
+
+
