@@ -1,5 +1,5 @@
 # GitCurator mirror gate — runs the full CI gate (38 module compiles +
-# 704 tests + the offline websites-golden run) against the PRIVATE
+# 772 tests + the offline websites-golden run) against the PRIVATE
 # assadigit/GitCurator repository, checked out with the GC_PAT secret.
 #
 # Why here? This repository is public, so GitHub Actions minutes are
@@ -31,7 +31,7 @@ on:
 
 jobs:
   verify:
-    name: Python gate (compile + tests + golden)
+    name: Python gate (compile + 772 tests + golden)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -65,6 +65,7 @@ jobs:
           gitcurator/gui/app.py
           gitcurator/gui/icons.py
           gitcurator/gui/telegram_lock.py
+          gitcurator/gui/constants.py
           gitcurator/core/links.py
           gitcurator/core/storage.py
           gitcurator/core/note_builder.py
@@ -101,7 +102,7 @@ jobs:
           gitcurator/tools/smoke_detectset.py
 
       - name: Run the test suite (core + e2e + goodrepos + reliability + quarantine + phase0 + phase1 + phase2 + phase3 + phase4 + phase5 + packaging + llamacpp + phase6 + connection + detectset + webproxy + intakefix + sealfix)
-        run: python -m unittest tests.test_core tests.test_e2e tests.test_goodrepos tests.test_reliability tests.test_quarantine tests.test_phase0 tests.test_phase1 tests.test_phase2 tests.test_phase3 tests.test_phase4 tests.test_phase5 tests.test_packaging tests.test_llamacpp tests.test_phase6 tests.test_connection tests.test_detectset tests.test_webproxy tests.test_intakefix tests.test_sealfix -v
+        run: python -m unittest tests.test_core tests.test_e2e tests.test_goodrepos tests.test_reliability tests.test_quarantine tests.test_phase0 tests.test_phase1 tests.test_phase2 tests.test_phase3 tests.test_phase4 tests.test_phase5 tests.test_packaging tests.test_llamacpp tests.test_phase6 tests.test_connection tests.test_detectset tests.test_webproxy tests.test_intakefix tests.test_sealfix tests.test_v0230 -v
 
       - name: Offline golden-set run (websites pipeline, no network)
         run: python gitcurator/tools/run_golden_websites.py --offline
